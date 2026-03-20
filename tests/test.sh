@@ -2,7 +2,11 @@
 
 COLS=40
 
-fail() { printf "\033[31;40mFAIL\033[0m\n"; exit 1; }
+fail() {
+    msg="$1"
+    printf "\033[31;40mFAIL\033[0m (%s)\n" "${msg}"
+    exit 1
+}
 
 wideprint() {
     str="$1"
@@ -23,12 +27,12 @@ printf "bygg is at:\t%s\n" "${BYGG}"
 
 # Do a lint check on the test runner.
 wideprint "shellcheck (test runner)"
-shellcheck --norc -o all "${TESTS}/test.sh" || fail
+shellcheck --norc -o all "${TESTS}/test.sh" || fail "shellcheck"
 printf "\033[32;40mOK\033[0m\n"
 
 # Do a lint check on the test runner.
 wideprint "shellcheck (bygg)"
-# : shellcheck --norc -o all "${BYGG}" || fail
+# : shellcheck --norc -o all "${BYGG}" || fail "shelllcheck"
 printf "\033[32;40mOK\033[0m\n"
 
 # Build each of the test projects and check their output.
@@ -45,19 +49,21 @@ for t in "${TESTS}"/*; do
     if [ "${expected_exit}" -eq 0 ]; then
         (
             # Build the project.
-            "${BYGG}" "${t}/src" "${t}/build"
+            "${BYGG}" "${t}/src" "${t}/build" > /dev/null
             exit_code=$?
 
             # Check the exit code.
             if [ "${exit_code}" -ne "${expected_exit}" ]; then
-                fail
+                fail "expected exit code ${expected_exit}, got ${exit_code}"
             fi
 
             # Run the program.
             "${t}/build/a.out" > "${t}/output.txt"
 
             # Compare output.
-            diff "${t}/output.txt" "${t}/expected-output.txt" || fail
+            diff "${t}/output.txt" "${t}/expected-output.txt" || fail "diff mismatch"
+
+            printf "\033[32;40mOK\033[0m\n"
         )
     fi
 
@@ -70,16 +76,13 @@ for t in "${TESTS}"/*; do
 
             # Check the exit code.
             if [ "${exit_code}" -ne "${expected_exit}" ]; then
-                fail
+                fail "expected exit code ${expected_exit}, got ${exit_code}"
             fi
 
             # Compare output.
-            diff "${t}/output.txt" "${t}/expected-output.txt" || fail
+            diff "${t}/output.txt" "${t}/expected-output.txt" || fail "diff mismatch"
+
+            printf "\033[32;40mOK\033[0m\n"
         )
     fi
-
-    #$BYGG $t/src $t/build || fail()
-    ##(cd $t && $BYGG && build/a.out > output.txt)
-    #echo "OK" 
-    printf "\033[32;40mOK\033[0m\n"
 done
