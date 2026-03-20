@@ -17,10 +17,7 @@ queue_push() { QUEUE="${QUEUE} $1" ; }
 
 # Retrieve the next element of the queue without popping it.
 # shellcheck disable=SC2086
-queue_get() {
-    printf '%s\n' ${QUEUE} | sed -n "${QHEAD}p"
-    #QHEAD=$((QHEAD + 1))
-}
+queue_get() { printf '%s\n' ${QUEUE} | sed -n "${QHEAD}p"; }
 
 # Check if an element is contained in a queue.
 queue_contains() {
@@ -33,49 +30,44 @@ queue_contains() {
 # Return the length of a queue.
 queue_len() { echo "${QUEUE}" | wc -w; }
 
-# Module file (.bygg) parsing.
-get_module_name() {
-    head -n 1 "$1"
-}
+# Parse the module name from a .bygg file.
+get_module_name() { head -n 1 "$1"; }
 
-get_imports() {
-    tail -n +2 "$1"
-}
+# Parse the imports from a .bygg file.
+get_imports() { tail -n +2 "$1"; }
 
 find_module_dir() {
-    find "${SRC_DIR}" -type f -name "$1.bygg" -printf '%h' -quit
+    dir=$(find "${SRC_DIR}" -type f -name "$1.bygg" -printf '%h' -quit)
+    [ -n "${dir}" ] || return 1
+    printf '%s\n' "${dir}"
 }
 
 build_module() {
     mod="$1"
-    moddir=$(find_module_dir "${mod}")
-    bygg="${moddir}/${mod}.bygg"
+    moddir=$(find_module_dir "${mod}") || fail "could not locate module ${mod}"
+    byggfile="${moddir}/${mod}.bygg"
 
     # Print feedback on number of modules compiled and how many remain.
     # shellcheck disable=SC2312
     printf "[%d/%d] %s\n" "${QHEAD}" "$(queue_len)" "${mod}"
     debug "module dir: ${moddir}"
-    debug "bygg file: ${bygg}"
+    debug "bygg file: ${byggfile}"
 
     # 1. Generate amalgamation file
     amalg="${BUILD_DIR}/${mod}_all.c"
-    debug "generating amalgamation ${amalg}"
     echo "// amalgamation for ${mod}" > "${amalg}"
+    debug "generating amalgamation ${amalg}"
 
-    # Include all .c files in the module directory
-    cfiles=$(printf '%s\n' "${moddir}"/*.c)
-    if [ "${cfiles}" = "${moddir}/*.c" ]; then
-        cfiles=""
-    fi
-
-    for c in ${cfiles}; do
-        debug "\t+ ${c}"
+    # Include all .c files in the module directory.
+    for c in "${moddir}"/*.c; do
+        [ -e "${c}" ] || continue
         echo "#include \"$(basename "${c}")\"" >> "${amalg}"
+        debug "\t+ ${c}"
     done
 
     # 2. Compute include paths from direct imports.
     includes="${moddir}"
-    for dep in $(get_imports "${bygg}"); do
+    for dep in $(get_imports "${byggfile}"); do
         depdir=$(find_module_dir "${dep}")
         includes="${includes} ${depdir}"
     done
@@ -87,11 +79,11 @@ build_module() {
         set -- "$@" -I "${inc}"
     done
     set -- "$@" -c "${amalg}" -o "${obj}"
-    "$@" || exit 1
+    "$@" || fail "compiling ${mod} failed"
 
     # 4. Archive into static library
     lib="${BUILD_DIR}/${mod}.a"
-    ar rcs "${lib}" "${obj}" || exit 1
+    ar rcs "${lib}" "${obj}" || fail "archiving ${mod} failed"
 }
 
 
