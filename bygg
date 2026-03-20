@@ -1,22 +1,5 @@
 #!/bin/sh
 
-# 1. Parse main.bygg → get list of root modules
-# 2. Recursively resolve dependency closure
-# 3. Topologically sort modules
-# 4. Build each module exactly once:
-#       - generate amalgamation .c
-#       - compile to .o
-#       - archive to .a
-# 5. Compile main.c with -I for its direct deps
-# 6. Link main.o + all module .a files (in topo order)
-
-# Example .bygg file:
-# module_name
-# moduleA
-# moduleB
-# ...
-# moduleZ
-
 fail() {
     msg="$1"
     echo "error: ${msg}"
@@ -51,16 +34,20 @@ build_module() {
         echo "#include \"$(basename "${c}")\"" >> "${amalg}"
     done
 
-    # 2. Compute include paths from direct imports
-    includes="-I ${SRC_DIR}/${mod}"
+    # 2. Compute include paths from direct imports.
+    includes="${SRC_DIR}/${mod}"
     for dep in $(get_imports "${bygg}"); do
-        includes="${includes} -I ${SRC_DIR}/${dep}"
+        includes="${includes} ${SRC_DIR}/${dep}"
     done
 
     # 3. Compile module into .o
     obj="${BUILD_DIR}/${mod}.o"
-    # TODO: Is this quoting of `includes` actually correct?
-    gcc -Wno-error=implicit-function-declaration "${includes}" -c "${amalg}" -o "${obj}" || exit 1
+    set -- gcc -Wno-error=implicit-function-declaration
+    for inc in ${includes}; do
+        set -- "$@" -I "${inc}"
+    done
+    set -- "$@" -c "${amalg}" -o "${obj}"
+    "$@" || exit 1
 
     # 4. Archive into static library
     lib="${BUILD_DIR}/${mod}.a"
@@ -72,8 +59,10 @@ build_module() {
 QUEUE=""
 QHEAD=1
 
-SRC_DIR=$1
-BUILD_DIR=$2
+SRC_DIR="$(cd -- "$(dirname -- "$1")" && pwd)"
+BUILD_DIR="$(cd -- "$(dirname -- "$2")" && pwd)"
+SRC_DIR="${SRC_DIR}"/$(basename "$1")
+BUILD_DIR="${BUILD_DIR}"/$(basename "$2")
 
 
 stat "${SRC_DIR}/main.bygg" >/dev/null 2>&1 || fail "no main.bygg"
@@ -81,7 +70,11 @@ mkdir -p "${BUILD_DIR}"
 
 # Seed queue with main imports
 for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
-    QUEUE="${QUEUE} ${dep}"
+    if [ -n "${QUEUE}" ]; then
+        QUEUE="${QUEUE} ${dep}"
+    else
+        QUEUE="${dep}"
+    fi
 done
 
 # Process queue
@@ -98,32 +91,49 @@ while :; do
         for q in ${QUEUE}; do
             [ "${q}" = "${dep}" ] && found=true && break
         done
-        ${found} || QUEUE="${QUEUE} ${dep}"
+        if [ -n "${QUEUE}" ]; then
+            ${found} || QUEUE="${QUEUE} ${dep}"
+        else
+            ${found} || QUEUE="${dep}"
+        fi
     done
 
     QHEAD=$((QHEAD + 1))
 done
 
-# Compile main.
+# Resolve main include directives.
 includes=""
 for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
-    includes="${includes} -I ${SRC_DIR}/${dep}"
+    if [ -n "${includes}" ]; then
+        includes="${includes} ${SRC_DIR}/${dep}"
+    else
+        includes="${SRC_DIR}/${dep}"
+    fi
 done
-if [ -n "${includes}" ]; then
-    gcc "${includes}" -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
-else
-    gcc -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
-fi
 
-# Link.
+# Compile.
+set -- gcc
+for inc in ${includes}; do
+    set -- "$@" -I "${inc}"
+done
+set -- "$@" -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
+"$@" || exit 1
+
+
+# Construct archive string.
 archives=""
 for mod in ${QUEUE}; do
-    archives="${archives} ${BUILD_DIR}/${mod}.a"
+    if [ -n "${archives}" ]; then
+        archives="${archives} ${BUILD_DIR}/${mod}.a"
+    else
+        archives="${BUILD_DIR}/${mod}.a"
+    fi
 done
 
-
-if [ -n "${archives}" ]; then
-    gcc "${BUILD_DIR}/main.o" "${archives}" -o "${BUILD_DIR}/a.out"
-else
-    gcc "${BUILD_DIR}/main.o" -o "${BUILD_DIR}/a.out"
-fi
+# Link.
+set -- gcc "${BUILD_DIR}/main.o"
+for arc in ${archives}; do
+    set -- "$@" "${arc}"
+done
+set -- "$@" -o "${BUILD_DIR}/a.out"
+"$@" || exit 1
