@@ -17,8 +17,11 @@
 # ...
 # moduleZ
 
-set -x
-
+fail() {
+    msg="$1"
+    echo "error: ${msg}"
+    exit 1
+}
 
 get_module_name() {
     head -n 1 "$1"
@@ -29,7 +32,7 @@ get_imports() {
 }
 
 find_module_dir() {
-    find src -type f -name "$1.bygg" -printf '%h' -quit
+    find ${SRC_DIR} -type f -name "$1.bygg" -printf '%h' -quit
 }
 
 build_module() {
@@ -40,7 +43,7 @@ build_module() {
     echo "=== Building module $mod ==="
 
     # 1. Generate amalgamation file
-    amalg="build/${mod}_all.c"
+    amalg="${BUILD_DIR}/${mod}_all.c"
     echo "// amalgamation for $mod" > "$amalg"
 
     # Include all .c files in the module directory
@@ -49,17 +52,17 @@ build_module() {
     done
 
     # 2. Compute include paths from direct imports
-    local includes="-I src/$mod"
+    local includes="-I ${SRC_DIR}/$mod"
     for dep in $(get_imports "$bygg"); do
-        includes="$includes -I src/$dep"
+        includes="$includes -I ${SRC_DIR}/$dep"
     done
 
     # 3. Compile module into .o
-    local obj="build/$mod.o"
+    local obj="${BUILD_DIR}/$mod.o"
     gcc -Wno-error=implicit-function-declaration $includes -c "$amalg" -o "$obj" || exit 1
 
     # 4. Archive into static library
-    local lib="build/$mod.a"
+    local lib="${BUILD_DIR}/$mod.a"
     ar rcs "$lib" "$obj" || exit 1
 }
 
@@ -68,8 +71,14 @@ build_module() {
 QUEUE=""
 QHEAD=1
 
+SRC_DIR=$1
+BUILD_DIR=$2
+
+stat "${SRC_DIR}/main.bygg" &> /dev/null || fail "no main.bygg"
+mkdir -p "${BUILD_DIR}"
+
 # Seed queue with main imports
-for dep in $(get_imports src/main.bygg); do
+for dep in $(get_imports ${SRC_DIR}/main.bygg); do
     QUEUE="$QUEUE $dep"
 done
 
@@ -82,7 +91,7 @@ while :; do
     build_module "$mod"
 
     # Enqueue its imports if not already present
-    for dep in $(get_imports "src/$mod/$mod.bygg"); do
+    for dep in $(get_imports "${SRC_DIR}/$mod/$mod.bygg"); do
         found=false
         for q in $QUEUE; do
             [ "$q" = "$dep" ] && found=true && break
@@ -95,15 +104,15 @@ done
 
 # Compile main.
 includes=""
-for dep in $(get_imports "src/main.bygg"); do
-    includes="$includes -I src/$dep"
+for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
+    includes="$includes -I ${SRC_DIR}/$dep"
 done
-gcc $includes -c src/main.c -o build/main.o
+gcc $includes -c ${SRC_DIR}/main.c -o ${BUILD_DIR}/main.o
 
 # Link.
 archives=""
 for mod in $QUEUE; do
-    archives="${archives} build/${mod}.a"
+    archives="${archives} ${BUILD_DIR}/${mod}.a"
 done
 echo $archives
-gcc build/main.o ${archives}
+gcc ${BUILD_DIR}/main.o ${archives}

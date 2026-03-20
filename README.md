@@ -25,6 +25,11 @@ Modules only see the headers of modules they explicitly import.
 Just run `bygg`.
 
 
+## Requirements
+In order to run `bygg` you just need standard system utilities like
+`sed`, `grep`, `diff`, and so on.
+
+
 ## Modules
 
 A module in `bygg` is made up of a directory containing a header file,
@@ -76,6 +81,18 @@ You're free to organize it however you want.
 Module dependency and visibility is defined entirely by the `.bygg` files.
 
 
+## Contributing
+
+For portability both `bygg` and the test runner are written in POSIX `sh`.
+In order to run the tests you will need the standard GNU toolchain
+(`gcc`, `ar`, `ld`, ...) as well as `shellcheck`.
+
+Run the tests by running the `tests/test.sh` script.
+This will run `shellcheck` on the test runner itself and `bygg`,
+and then build each project in the `tests/` directory and
+compare its output to its expected output.
+
+
 ## Current Limitations
 
 This is an early version. Known gaps include:
@@ -83,4 +100,5 @@ This is an early version. Known gaps include:
 - No validation for missing modules or headers
 - No incremental rebuilds
 - No diagnostics for unused or missing imports
+
 
