@@ -89,7 +89,7 @@ for t in "${TESTS}"/*; do
     if [ "${expected_exit}" -ne 0 ]; then
         (
             # Build the project.
-            "${BYGG}" "${t}/src" "${t}/build" > "${t}/output.txt"
+            "${BYGG}" "${t}/src" "${t}/build" 2> "${t}/output.txt"
             exit_code=$?
 
             # Check the exit code.

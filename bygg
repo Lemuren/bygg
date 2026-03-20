@@ -1,11 +1,39 @@
 #!/bin/sh
 
-fail() {
-    msg="$1"
-    echo "error: ${msg}"
-    exit 1
+VERBOSE=0
+
+# Print a failure message and exit.
+fail() { echo "error: $1" >&2; exit 1; }
+
+# Print a debug message, i.e. if VERBOSE is set to true.
+# shellcheck disable=SC2244,SC2059
+debug() { [ "${VERBOSE}" -eq 1 ] && printf "$*\n"; }
+
+# Initialize a new, empty queue.
+queue_init() { QUEUE="main"; QHEAD=1; }
+
+# Push an element onto the end of the queue.
+queue_push() { QUEUE="${QUEUE} $1" ; }
+
+# Retrieve the next element of the queue without popping it.
+# shellcheck disable=SC2086
+queue_get() {
+    printf '%s\n' ${QUEUE} | sed -n "${QHEAD}p"
+    #QHEAD=$((QHEAD + 1))
 }
 
+# Check if an element is contained in a queue.
+queue_contains() {
+    for q in ${QUEUE}; do
+        [ "$1" = "${q}" ] && return 0
+    done
+    return 1
+}
+
+# Return the length of a queue.
+queue_len() { echo "${QUEUE}" | wc -w; }
+
+# Module file (.bygg) parsing.
 get_module_name() {
     head -n 1 "$1"
 }
@@ -23,10 +51,15 @@ build_module() {
     moddir=$(find_module_dir "${mod}")
     bygg="${moddir}/${mod}.bygg"
 
-    echo "=== Building module ${mod} ==="
+    # Print feedback on number of modules compiled and how many remain.
+    # shellcheck disable=SC2312
+    printf "[%d/%d] %s\n" "${QHEAD}" "$(queue_len)" "${mod}"
+    debug "module dir: ${moddir}"
+    debug "bygg file: ${bygg}"
 
     # 1. Generate amalgamation file
     amalg="${BUILD_DIR}/${mod}_all.c"
+    debug "generating amalgamation ${amalg}"
     echo "// amalgamation for ${mod}" > "${amalg}"
 
     # Include all .c files in the module directory
@@ -34,7 +67,9 @@ build_module() {
     if [ "${cfiles}" = "${moddir}/*.c" ]; then
         cfiles=""
     fi
+
     for c in ${cfiles}; do
+        debug "\t+ ${c}"
         echo "#include \"$(basename "${c}")\"" >> "${amalg}"
     done
 
@@ -61,89 +96,45 @@ build_module() {
 
 
 
-QUEUE=""
-QHEAD=1
-
 SRC_DIR="$(cd -- "$(dirname -- "$1")" && pwd)"
 BUILD_DIR="$(cd -- "$(dirname -- "$2")" && pwd)"
 SRC_DIR="${SRC_DIR}"/$(basename "$1")
 BUILD_DIR="${BUILD_DIR}"/$(basename "$2")
+debug "source dir: ${SRC_DIR}"
+debug "build dir: ${BUILD_DIR}"
 
 
-stat "${SRC_DIR}/main.bygg" >/dev/null 2>&1 || fail "no main.bygg"
+# Create the build directory.
 mkdir -p "${BUILD_DIR}"
 
-# Seed queue with main imports
-for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
-    if [ -n "${QUEUE}" ]; then
-        QUEUE="${QUEUE} ${dep}"
-    else
-        QUEUE="${dep}"
-    fi
-done
+
+# Initialize queue with the main module.
+stat "${SRC_DIR}/main.bygg" >/dev/null 2>&1 || fail "no main.bygg"
+queue_init
 
 # Process queue
 while :; do
-    # shellcheck disable=SC2086
-    mod=$(printf "%s\n" ${QUEUE} | sed -n "${QHEAD}p")
+    # Fetch next module from the queue.
+    mod=$(queue_get)
     [ -z "${mod}" ] && break
 
-    # Build module
-    echo "Building ${mod}"
+    # Build the module.
     build_module "${mod}"
 
     # Enqueue its imports if not already present
     moddir=$(find_module_dir "${mod}")
     for dep in $(get_imports "${moddir}/${mod}.bygg"); do
-        found=false
-        for q in ${QUEUE}; do
-            [ "${q}" = "${dep}" ] && found=true && break
-        done
-        if [ -n "${QUEUE}" ]; then
-            ${found} || QUEUE="${QUEUE} ${dep}"
-        else
-            ${found} || QUEUE="${dep}"
-        fi
-        echo "QUEUE: ${QUEUE}"
+        queue_contains "${dep}" && continue
+        queue_push "${dep}"
     done
 
     QHEAD=$((QHEAD + 1))
 done
 
-# Resolve main include directives.
-includes=""
-for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
-    depdir=$(find_module_dir "${dep}")
-    if [ -n "${includes}" ]; then
-        includes="${includes} ${depdir}"
-    else
-        includes="${depdir}"
-    fi
-done
-
-# Compile.
-set -- gcc
-for inc in ${includes}; do
-    set -- "$@" -I "${inc}"
-done
-set -- "$@" -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
-"$@" || exit 1
-
-
-# Construct archive string.
-archives=""
-for mod in ${QUEUE}; do
-    if [ -n "${archives}" ]; then
-        archives="${archives} ${BUILD_DIR}/${mod}.a"
-    else
-        archives="${BUILD_DIR}/${mod}.a"
-    fi
-done
-
 # Link.
-set -- gcc "${BUILD_DIR}/main.o"
-for arc in ${archives}; do
-    set -- "$@" "${arc}"
+set -- gcc
+for mod in ${QUEUE}; do
+    set -- "$@" "${BUILD_DIR}/${mod}.a"
 done
 set -- "$@" -o "${BUILD_DIR}/a.out"
 "$@" || exit 1
