@@ -32,7 +32,7 @@ printf "\033[32;40mOK\033[0m\n"
 
 # Do a lint check on the test runner.
 wideprint "shellcheck (bygg)"
-# : shellcheck --norc -o all "${BYGG}" || fail "shelllcheck"
+shellcheck --norc -o all "${BYGG}" || fail "shelllcheck"
 printf "\033[32;40mOK\033[0m\n"
 
 # Build each of the test projects and check their output.
@@ -61,7 +61,7 @@ for t in "${TESTS}"/*; do
             "${t}/build/a.out" > "${t}/output.txt"
 
             # Compare output.
-            diff "${t}/output.txt" "${t}/expected-output.txt" || fail "diff mismatch"
+            diff "${t}/output.txt" "${t}/expected-output.txt" >/dev/null 2>&1 || fail "diff mismatch"
 
             printf "\033[32;40mOK\033[0m\n"
         )

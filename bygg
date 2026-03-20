@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # 1. Parse main.bygg → get list of root modules
 # 2. Recursively resolve dependency closure
@@ -32,38 +32,39 @@ get_imports() {
 }
 
 find_module_dir() {
-    find ${SRC_DIR} -type f -name "$1.bygg" -printf '%h' -quit
+    find "${SRC_DIR}" -type f -name "$1.bygg" -printf '%h' -quit
 }
 
 build_module() {
-    local mod="$1"
-    local moddir=$(find_module_dir "$mod")
-    local bygg="$moddir/$mod.bygg"
+    mod="$1"
+    moddir=$(find_module_dir "${mod}")
+    bygg="${moddir}/${mod}.bygg"
 
-    echo "=== Building module $mod ==="
+    echo "=== Building module ${mod} ==="
 
     # 1. Generate amalgamation file
     amalg="${BUILD_DIR}/${mod}_all.c"
-    echo "// amalgamation for $mod" > "$amalg"
+    echo "// amalgamation for ${mod}" > "${amalg}"
 
     # Include all .c files in the module directory
-    for c in "$moddir"/*.c; do
-        echo "#include \"$(basename "$c")\"" >> "$amalg"
+    for c in "${moddir}"/*.c; do
+        echo "#include \"$(basename "${c}")\"" >> "${amalg}"
     done
 
     # 2. Compute include paths from direct imports
-    local includes="-I ${SRC_DIR}/$mod"
-    for dep in $(get_imports "$bygg"); do
-        includes="$includes -I ${SRC_DIR}/$dep"
+    includes="-I ${SRC_DIR}/${mod}"
+    for dep in $(get_imports "${bygg}"); do
+        includes="${includes} -I ${SRC_DIR}/${dep}"
     done
 
     # 3. Compile module into .o
-    local obj="${BUILD_DIR}/$mod.o"
-    gcc -Wno-error=implicit-function-declaration $includes -c "$amalg" -o "$obj" || exit 1
+    obj="${BUILD_DIR}/${mod}.o"
+    # TODO: Is this quoting of `includes` actually correct?
+    gcc -Wno-error=implicit-function-declaration "${includes}" -c "${amalg}" -o "${obj}" || exit 1
 
     # 4. Archive into static library
-    local lib="${BUILD_DIR}/$mod.a"
-    ar rcs "$lib" "$obj" || exit 1
+    lib="${BUILD_DIR}/${mod}.a"
+    ar rcs "${lib}" "${obj}" || exit 1
 }
 
 
@@ -75,29 +76,29 @@ SRC_DIR=$1
 BUILD_DIR=$2
 
 
-stat "${SRC_DIR}/main.bygg" &> /dev/null || fail "no main.bygg"
+stat "${SRC_DIR}/main.bygg" >/dev/null 2>&1 || fail "no main.bygg"
 mkdir -p "${BUILD_DIR}"
 
 # Seed queue with main imports
-for dep in $(get_imports ${SRC_DIR}/main.bygg); do
-    QUEUE="$QUEUE $dep"
+for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
+    QUEUE="${QUEUE} ${dep}"
 done
 
 # Process queue
 while :; do
-    mod=$(printf "%s\n" $QUEUE | sed -n "${QHEAD}p")
-    [ -z "$mod" ] && break
+    mod=$(printf "%s\n" "${QUEUE}" | sed -n "${QHEAD}p")
+    [ -z "${mod}" ] && break
 
     # Build module
-    build_module "$mod"
+    build_module "${mod}"
 
     # Enqueue its imports if not already present
-    for dep in $(get_imports "${SRC_DIR}/$mod/$mod.bygg"); do
+    for dep in $(get_imports "${SRC_DIR}/${mod}/${mod}.bygg"); do
         found=false
-        for q in $QUEUE; do
-            [ "$q" = "$dep" ] && found=true && break
+        for q in ${QUEUE}; do
+            [ "${q}" = "${dep}" ] && found=true && break
         done
-        $found || QUEUE="$QUEUE $dep"
+        ${found} || QUEUE="${QUEUE} ${dep}"
     done
 
     QHEAD=$((QHEAD + 1))
@@ -106,13 +107,23 @@ done
 # Compile main.
 includes=""
 for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
-    includes="$includes -I ${SRC_DIR}/$dep"
+    includes="${includes} -I ${SRC_DIR}/${dep}"
 done
-gcc $includes -c ${SRC_DIR}/main.c -o ${BUILD_DIR}/main.o
+if [ -n "${includes}" ]; then
+    gcc "${includes}" -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
+else
+    gcc -c "${SRC_DIR}/main.c" -o "${BUILD_DIR}/main.o"
+fi
 
 # Link.
 archives=""
-for mod in $QUEUE; do
+for mod in ${QUEUE}; do
     archives="${archives} ${BUILD_DIR}/${mod}.a"
 done
-gcc ${BUILD_DIR}/main.o ${archives} -o ${BUILD_DIR}/a.out
+
+
+if [ -n "${archives}" ]; then
+    gcc "${BUILD_DIR}/main.o" "${archives}" -o "${BUILD_DIR}/a.out"
+else
+    gcc "${BUILD_DIR}/main.o" -o "${BUILD_DIR}/a.out"
+fi
