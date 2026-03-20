@@ -1,50 +1,68 @@
 #!/bin/sh
 
-COLS=40
+# This is the `bygg` test runner script.
+#
+# First, it runs shellcheck on both itself and bygg for linting and
+# static analysis.
+#
+# However, the main testing is done by building each project in the tests/
+# directory. Such a test consists of a src/ directory that defines the project
+# to be built, as well as two text files: expected-exit.txt which defines what
+# status code bygg should exit with and expected-output.txt which is compared
+# to the output of building the project.
+#
+# For projects that are meant to successfully build the compared output is
+# that of running the built binary. For projects that are meant to fail to
+# build the compared output is the output from bygg itself.
+#
+# As with bygg, this test runner is meant to be fully POSIX compliant.
+#
 
-fail() {
-    msg="$1"
-    printf "\033[31;40mFAIL\033[0m (%s)\n" "${msg}"
-    exit 1
-}
+WIDTH=45
 
-wideprint() {
+# Print a failure message and exit.
+fail() { printf "\033[31;40mFAIL\033[0m (%s)\n" "$1"; exit 1; }
+
+# Gets the length of a string
+strlen() { printf %s "$1" | wc -c; }
+
+# Pads a string to the right with dots.
+dotpad() {
     str="$1"
-    format="$2"
-
-    len="$(printf %s "${str}" | wc -c)"
-    dots=$((COLS - len))
-
-    printf "%s" "${str}" "${format}"
-    printf "%*s" "${dots}" "" | tr ' ' '.'
+    padding=$((WIDTH - $(strlen "${str}")))
+    printf "%s" "${str}"
+    printf "%*s" "${padding}" "" | tr ' ' '.'
 }
 
+
+# Useful to know which test runner and bygg we are testing.
 TESTS="$(cd -- "$(dirname -- "$0")" && pwd)"
 BYGG=$(cd "${TESTS}/../" || exit 1 && pwd)/bygg
-
+echo "-----------------------------------------------"
 printf "tests are at:\t%s\n" "${TESTS}"
 printf "bygg is at:\t%s\n" "${BYGG}"
+echo "-----------------------------------------------"
 
-# Do a lint check on the test runner.
-wideprint "shellcheck (test runner)"
+# Linting and static analysis of the test runner (this script!).
+dotpad "shellcheck test"
 shellcheck --norc -o all "${TESTS}/test.sh" || fail "shellcheck"
 printf "\033[32;40mOK\033[0m\n"
 
-# Do a lint check on the test runner.
-wideprint "shellcheck (bygg)"
+# Linting and static analysis of bygg.
+dotpad "shellcheck bygg"
 shellcheck --norc -o all "${BYGG}" || fail "shelllcheck"
 printf "\033[32;40mOK\033[0m\n"
 
 # Build each of the test projects and check their output.
 for t in "${TESTS}"/*; do
     [ -d "${t}" ] || continue
-    str="Running $(basename "${t}")"
-    wideprint "${str}"
+    dotpad "$(basename "${t}")"
 
     # Clean up build directory if it exists.
     rm -rf "${t}/build"
 
     expected_exit=$(cat "${t}/expected-exit.txt")
+
     # Positive test.
     if [ "${expected_exit}" -eq 0 ]; then
         (
@@ -58,7 +76,7 @@ for t in "${TESTS}"/*; do
             fi
 
             # Run the program.
-            "${t}/build/a.out" > "${t}/output.txt"
+            "${t}/build/a.out" > "${t}/output.txt" || fail "missing a.out"
 
             # Compare output.
             diff "${t}/output.txt" "${t}/expected-output.txt" >/dev/null 2>&1 || fail "diff mismatch"
