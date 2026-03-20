@@ -35,9 +35,10 @@ build_module() {
     done
 
     # 2. Compute include paths from direct imports.
-    includes="${SRC_DIR}/${mod}"
+    includes="${moddir}"
     for dep in $(get_imports "${bygg}"); do
-        includes="${includes} ${SRC_DIR}/${dep}"
+        depdir=$(find_module_dir "${dep}")
+        includes="${includes} ${depdir}"
     done
 
     # 3. Compile module into .o
@@ -88,7 +89,8 @@ while :; do
     build_module "${mod}"
 
     # Enqueue its imports if not already present
-    for dep in $(get_imports "${SRC_DIR}/${mod}/${mod}.bygg"); do
+    moddir=$(find_module_dir "${mod}")
+    for dep in $(get_imports "${moddir}/${mod}.bygg"); do
         found=false
         for q in ${QUEUE}; do
             [ "${q}" = "${dep}" ] && found=true && break
