@@ -80,7 +80,7 @@ for t in "${TESTS}"/*; do
             fi
 
             # Compare output.
-            diff "${t}/output.txt" "${t}/expected-output.txt" || fail "diff mismatch"
+            diff "${t}/output.txt" "${t}/expected-output.txt" >/dev/null 2>&1 || fail "diff mismatch"
 
             printf "\033[32;40mOK\033[0m\n"
         )
