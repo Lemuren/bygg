@@ -30,7 +30,11 @@ build_module() {
     echo "// amalgamation for ${mod}" > "${amalg}"
 
     # Include all .c files in the module directory
-    for c in "${moddir}"/*.c; do
+    cfiles=$(printf '%s\n' "${moddir}"/*.c)
+    if [ "${cfiles}" = "${moddir}/*.c" ]; then
+        cfiles=""
+    fi
+    for c in ${cfiles}; do
         echo "#include \"$(basename "${c}")\"" >> "${amalg}"
     done
 
@@ -109,10 +113,11 @@ done
 # Resolve main include directives.
 includes=""
 for dep in $(get_imports "${SRC_DIR}/main.bygg"); do
+    depdir=$(find_module_dir "${dep}")
     if [ -n "${includes}" ]; then
-        includes="${includes} ${SRC_DIR}/${dep}"
+        includes="${includes} ${depdir}"
     else
-        includes="${SRC_DIR}/${dep}"
+        includes="${depdir}"
     fi
 done
 
