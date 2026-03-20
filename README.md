@@ -2,32 +2,32 @@
 
 **bygg** is a tiny, dependency‑driven build system for C that provides real
 modules, clean encapsulation, and predictable builds — all implemented in
-a single POSIX shell script.
+a single, portable POSIX shell script.
 
 ## Key Features
 
 **✔ Explicit modules**
+
 Each module has a .bygg file that declares its name and the modules it depends on.
 
+**✔ Private by default**
+
+Unless exposed by a module's header, all smybols are private. No need for
+`static` or header guards.
+
 **✔ Automatic dependency resolution**
+
 The build script discovers all required modules starting from main.bygg.
 
 **✔ Correct build order with no manual rules**
+
 Modules are compiled in dependency order automatically.
-
-**✔ One static library per module**
-Each module becomes a clean, isolated unit at link time.
-
-**✔ Simple, predictable header usage**
-Modules only see the headers of modules they explicitly import.
-
-**✔ No Makefiles or build configuration files**
-Just run `bygg`.
 
 
 ## Requirements
+
 In order to run `bygg` you just need standard system utilities like
-`sed`, `grep`, `diff`, and so on.
+`sed`, `grep`, `diff`, `wc`, and so on.
 
 
 ## Modules
@@ -104,5 +104,4 @@ This is an early version. Known gaps include:
 - No validation for missing modules or headers
 - No incremental rebuilds
 - No diagnostics for unused or missing imports
-
 
