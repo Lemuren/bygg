@@ -42,7 +42,7 @@ build_module() {
 
     # 3. Compile module into .o
     obj="${BUILD_DIR}/${mod}.o"
-    set -- gcc -Wno-error=implicit-function-declaration
+    set -- gcc -Wno-error=implicit-function-declaration -Wno-implicit-function-declaration
     for inc in ${includes}; do
         set -- "$@" -I "${inc}"
     done
