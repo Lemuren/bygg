@@ -52,6 +52,10 @@ DependencyB
 The first line is the module's name.
 The following lines list the modules it depends on.
 
+Note that the name of the `.bygg` file _must_ match the name
+of the module it declares. For example, `foo.bygg` must start
+with the line `foo`.
+
 
 ## Project Layout
 
