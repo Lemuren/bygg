@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+# 1. Parse main.bygg → get list of root modules
+# 2. Recursively resolve dependency closure
+# 3. Topologically sort modules
+# 4. Build each module exactly once:
+#       - generate amalgamation .c
+#       - compile to .o
+#       - archive to .a
+# 5. Compile main.c with -I for its direct deps
+# 6. Link main.o + all module .a files (in topo order)
+
+# Example .bygg file:
+# module_name
+# moduleA
+# moduleB
+# ...
+# moduleZ
+
+set -x
+
+
+get_module_name() {
+    head -n 1 "$1"
+}
+
+get_imports() {
+    tail -n +2 "$1"
+}
+
+build_module() {
+    local mod="$1"
+    local moddir="src/$mod"
+    local bygg="$moddir/$mod.bygg"
+
+    echo "=== Building module $mod ==="
+
+    # 1. Generate amalgamation file
+    amalg="build/${mod}_all.c"
+    echo "// amalgamation for $mod" > "$amalg"
+
+    # Include all .c files in the module directory
+    for c in "$moddir"/*.c; do
+        echo "#include \"$(basename "$c")\"" >> "$amalg"
+    done
+
+    # 2. Compute include paths from direct imports
+    local includes="-I src/$mod"
+    for dep in $(get_imports "$bygg"); do
+        includes="$includes -I src/$dep"
+    done
+
+    # 3. Compile module into .o
+    local obj="build/$mod.o"
+    gcc -Wno-error=implicit-function-declaration $includes -c "$amalg" -o "$obj" || exit 1
+
+    # 4. Archive into static library
+    local lib="build/$mod.a"
+    ar rcs "$lib" "$obj" || exit 1
+}
+
+
+
+QUEUE=""
+QHEAD=1
+
+# Seed queue with main imports
+for dep in $(get_imports src/main.bygg); do
+    QUEUE="$QUEUE $dep"
+done
+
+# Process queue
+while :; do
+    mod=$(printf "%s\n" $QUEUE | sed -n "${QHEAD}p")
+    [ -z "$mod" ] && break
+
+    # Build module
+    build_module "$mod"
+
+    # Enqueue its imports if not already present
+    for dep in $(get_imports "src/$mod/$mod.bygg"); do
+        found=false
+        for q in $QUEUE; do
+            [ "$q" = "$dep" ] && found=true && break
+        done
+        $found || QUEUE="$QUEUE $dep"
+    done
+
+    QHEAD=$((QHEAD + 1))
+done
+
+# Compile main.
+includes=""
+for dep in $(get_imports "src/main.bygg"); do
+    includes="$includes -I src/$dep"
+done
+gcc $includes -c src/main.c -o build/main.o
+
+# Link.
+archives=""
+for mod in $QUEUE; do
+    archives="${archives} build/${mod}.a"
+done
+echo $archives
+gcc build/main.o ${archives}
