@@ -71,6 +71,11 @@ src
     └── modulec.h
 ```
 
+But `bygg` doesn't actually care about your project's layout.
+You're free to organize it however you want.
+Module dependency and visibility is defined entirely by the `.bygg` files.
+
+
 ## Current Limitations
 
 This is an early version. Known gaps include:

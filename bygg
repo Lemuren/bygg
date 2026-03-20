@@ -28,9 +28,13 @@ get_imports() {
     tail -n +2 "$1"
 }
 
+find_module_dir() {
+    find src -type f -name "$1.bygg" -printf '%h' -quit
+}
+
 build_module() {
     local mod="$1"
-    local moddir="src/$mod"
+    local moddir=$(find_module_dir "$mod")
     local bygg="$moddir/$mod.bygg"
 
     echo "=== Building module $mod ==="
