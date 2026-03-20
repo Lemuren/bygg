@@ -79,10 +79,12 @@ done
 
 # Process queue
 while :; do
-    mod=$(printf "%s\n" "${QUEUE}" | sed -n "${QHEAD}p")
+    # shellcheck disable=SC2086
+    mod=$(printf "%s\n" ${QUEUE} | sed -n "${QHEAD}p")
     [ -z "${mod}" ] && break
 
     # Build module
+    echo "Building ${mod}"
     build_module "${mod}"
 
     # Enqueue its imports if not already present
@@ -96,6 +98,7 @@ while :; do
         else
             ${found} || QUEUE="${dep}"
         fi
+        echo "QUEUE: ${QUEUE}"
     done
 
     QHEAD=$((QHEAD + 1))
