@@ -4,7 +4,9 @@
 modules, clean encapsulation, and predictable builds — all implemented in
 a single, portable POSIX shell script.
 
-![bygg logo](img/logo.png)
+<p align="center">
+  <img src="img/logo.png" />
+</p>
 
 ## Key Features
 
