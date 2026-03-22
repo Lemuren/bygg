@@ -4,6 +4,8 @@
 modules, clean encapsulation, and predictable builds — all implemented in
 a single, portable POSIX shell script.
 
+![bygg logo](img/logo.png)
+
 ## Key Features
 
 **✔ Explicit modules**
