@@ -1,4 +1,4 @@
-# Bygg - A C Build System for Idiots
+# Bygg - A C Build System
 
 **bygg** is a tiny, dependency‑driven build system for C that provides real
 modules, clean encapsulation, and predictable builds — all implemented in
