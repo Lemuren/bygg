@@ -36,7 +36,7 @@ queue_len() { echo "${QUEUE}" | wc -w; }
 get_module_name() { head -n 1 "$1"; }
 
 # Parse the imports from a .bygg file.
-get_imports() { tail -n +2 "$1"; }
+get_imports() { tail -n +2 "$1" | grep -v cflags | grep -v lflags | sed '/^$/d'; }
 
 find_module_dir() {
     dir=$(find "${SRC_DIR}" -type f -name "$1.bygg" -printf '%h' -quit)
