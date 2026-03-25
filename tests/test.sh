@@ -67,7 +67,7 @@ for t in "${TESTS}"/*; do
     if [ "${expected_exit}" -eq 0 ]; then
         (
             # Build the project.
-            "${BYGG}" "${t}/src" "${t}/build" > /dev/null
+            "${BYGG}" "--quiet" "${t}/src" "${t}/build" > /dev/null
             exit_code=$?
 
             # Check the exit code.
@@ -89,7 +89,7 @@ for t in "${TESTS}"/*; do
     if [ "${expected_exit}" -ne 0 ]; then
         (
             # Build the project.
-            "${BYGG}" "${t}/src" "${t}/build" 2> "${t}/output.txt"
+            "${BYGG}" "--quiet" "${t}/src" "${t}/build" 2> "${t}/output.txt"
             exit_code=$?
 
             # Check the exit code.
