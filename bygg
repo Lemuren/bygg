@@ -32,6 +32,12 @@ queue_contains() {
 # Return the length of a queue.
 queue_len() { echo "${QUEUE}" | wc -w; }
 
+# Parse cflags from a .bygg file.
+get_cflags() { grep cflags "$1" 2> /dev/null | cut -d' ' -f2-; }
+
+# Parse lflags from a .bygg file.
+get_lflags() { grep lflags "$1" 2> /dev/null | cut -d' ' -f2-;}
+
 # Parse the module name from a .bygg file.
 get_module_name() { head -n 1 "$1"; }
 
@@ -48,6 +54,10 @@ build_module() {
     mod="$1"
     moddir=$(find_module_dir "${mod}") || fail "could not locate module ${mod}"
     byggfile="${moddir}/${mod}.bygg"
+
+    cflags=$(get_cflags "${byggfile}")
+    # TODO: Actually use this ;)
+    # lflags=$(get_lflags "${byggfile}")
 
     # Print feedback on number of modules compiled and how many remain.
     # shellcheck disable=SC2312
@@ -80,7 +90,11 @@ build_module() {
     for inc in ${includes}; do
         set -- "$@" -I "${inc}"
     done
+    for flag in ${cflags}; do
+        set -- "$@" "${flag}"
+    done
     set -- "$@" -c "${amalg}" -o "${obj}"
+    debug "compiling: $@"
     "$@" || fail "compiling ${mod} failed"
 
     # 4. Archive into static library
@@ -186,7 +200,11 @@ main() {
     for mod in ${QUEUE}; do
         set -- "$@" "${BUILD_DIR}/${mod}.a"
     done
+    for flag in ${lflags}; do
+        set -- "$@" "${flag}"
+    done
     set -- "$@" -o "${BUILD_DIR}/a.out"
+    debug "linking: $@"
     "$@" || exit 1
 }
 
