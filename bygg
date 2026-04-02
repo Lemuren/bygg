@@ -56,8 +56,9 @@ build_module() {
     byggfile="${moddir}/${mod}.bygg"
 
     cflags=$(get_cflags "${byggfile}")
-    # TODO: Actually use this ;)
-    # lflags=$(get_lflags "${byggfile}")
+
+    # lflags are only relevant for the main bygg file.
+    [ "${mod}" = "main" ] && lflags=$(get_lflags "${byggfile}")
 
     # Print feedback on number of modules compiled and how many remain.
     # shellcheck disable=SC2312
@@ -158,6 +159,9 @@ parse_args() {
     # Now $1 and $2 should be srcdir and builddir
     [ $# -ge 2 ] || fail "usage: bygg [OPTION]... SRC_DIR BUILD_DIR"
 
+    # Create the build directory.
+    mkdir -p "$2"
+
     SRC_DIR="$(cd -- "$(dirname -- "$1")" && pwd)"
     BUILD_DIR="$(cd -- "$(dirname -- "$2")" && pwd)"
     SRC_DIR="${SRC_DIR}"/$(basename "$1")
@@ -169,8 +173,6 @@ main() {
     debug "source dir: ${SRC_DIR}"
     debug "build dir: ${BUILD_DIR}"
 
-    # Create the build directory.
-    mkdir -p "${BUILD_DIR}"
 
     # Initialize queue with the main module.
     stat "${SRC_DIR}/main.bygg" >/dev/null 2>&1 || fail "no main.bygg"
